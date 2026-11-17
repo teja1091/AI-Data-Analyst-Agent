@@ -15,6 +15,7 @@ class DatasetService:
         self.loader = DatasetLoader()
         self.structure_analyzer = StructureAnalyzer()
         self.quality_analyzer = QualityAnalyzer()
+    
 
     def process_upload(
         self,
@@ -48,4 +49,22 @@ class DatasetService:
             dataset=metadata,
             structure=structure,
             quality=quality
+        )
+
+    def __init__(
+        self,
+        loader=None,
+        structure_analyzer=None,
+        quality_analyzer=None
+    ):
+        self.loader = loader if loader is not None else DatasetLoader()
+        self.structure_analyzer = (
+            structure_analyzer
+            if structure_analyzer is not None
+            else StructureAnalyzer()
+        )
+        self.quality_analyzer = (
+            quality_analyzer
+            if quality_analyzer is not None
+            else QualityAnalyzer()
         )

@@ -420,7 +420,89 @@ class TestQualityAnalyzer(unittest.TestCase):
                 df,
                 threshold=True
             )
+    
+    def test_false_threshold_is_invalid(self):
+        df = pd.DataFrame({
+            "Country": ["India", "USA"]
+        })
 
+        with self.assertRaises(TypeError):
+            QualityAnalyzer.analyze_value_distribution(
+                df,
+                threshold=False
+            )
+
+
+    def test_zero_threshold_is_invalid(self):
+        df = pd.DataFrame({
+            "Country": ["India", "USA"]
+        })
+
+        with self.assertRaises(ValueError):
+            QualityAnalyzer.analyze_value_distribution(
+                df,
+                threshold=0
+            )
+
+
+    def test_negative_threshold_is_invalid(self):
+        df = pd.DataFrame({
+            "Country": ["India", "USA"]
+        })
+
+        with self.assertRaises(ValueError):
+            QualityAnalyzer.analyze_value_distribution(
+                df,
+                threshold=-0.5
+            )
+
+
+    def test_threshold_greater_than_one_is_invalid(self):
+        df = pd.DataFrame({
+            "Country": ["India", "USA"]
+        })
+
+        with self.assertRaises(ValueError):
+            QualityAnalyzer.analyze_value_distribution(
+                df,
+                threshold=1.1
+            )
+
+
+    def test_string_threshold_is_invalid(self):
+        df = pd.DataFrame({
+            "Country": ["India", "USA"]
+        })
+
+        with self.assertRaises(TypeError):
+            QualityAnalyzer.analyze_value_distribution(
+                df,
+                threshold="0.80"
+            )
+
+
+    def test_duplicate_columns_in_dominant_analysis(self):
+        df = pd.DataFrame(
+            [
+                ["India", "A"],
+                ["India", "A"],
+                ["USA", "B"],
+                ["India", "A"]
+            ],
+            columns=["Country", "Category"]
+        )
+
+        result = QualityAnalyzer.analyze_value_distribution(
+            df,
+            threshold=0.75
+        )
+
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[0]["column_index"], 0)
+        self.assertEqual(result[1]["column_index"], 1)
+
+        self.assertEqual(result[0]["dominant_value"], "India")
+        self.assertEqual(result[1]["dominant_value"], "A")
 
 if __name__ == "__main__":
     unittest.main()
