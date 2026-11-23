@@ -202,6 +202,88 @@ class TestOutlierAnalyzer(unittest.TestCase):
         self.analyzer.analyze(df)
 
         pd.testing.assert_frame_equal(df, original)
+    def test_custom_dataframe_index_returns_row_positions(self):
+
+        df = pd.DataFrame(
+            {
+                "sales": [100, 110, 120, 130, 900]
+            },
+            index=[100, 200, 300, 400, 500]
+        )
+
+        result = self.analyzer.analyze(df)
+        column = result["columns"][0]
+
+        # Returned indices represent zero-based row positions,
+        # not the original DataFrame index labels.
+        self.assertEqual(
+            column["iqr_outlier_indices"],
+            [4]
+        )
+
+        self.assertNotEqual(
+            column["iqr_outlier_indices"],
+            [500]
+        )
+
+    def test_nullable_integer_column(self):
+
+        df = pd.DataFrame({
+            "sales": pd.Series(
+                [100, 110, 120, 130, 900],
+                dtype="Int64"
+            )
+        })
+
+        result = self.analyzer.analyze(df)
+        column = result["columns"][0]
+
+        self.assertEqual(
+            column["valid_value_count"],
+            5
+        )
+
+        self.assertEqual(
+            column["iqr_outlier_count"],
+            1
+        )
+
+        self.assertEqual(
+            column["iqr_outlier_indices"],
+            [4]
+        )
+
+    def test_single_observation_has_no_outliers(self):
+
+        df = pd.DataFrame({
+            "sales": [100]
+        })
+
+        result = self.analyzer.analyze(df)
+        column = result["columns"][0]
+
+        self.assertEqual(
+            column["valid_value_count"],
+            1
+        )
+
+        self.assertEqual(
+            column["iqr_outlier_count"],
+            0
+        )
+
+        self.assertEqual(
+            column["zscore_outlier_count"],
+            0
+        )
+
+        self.assertTrue(
+            any(
+                "zero variance" in warning
+                for warning in result["warnings"]
+            )
+        )
+
 
 
 if __name__ == "__main__":

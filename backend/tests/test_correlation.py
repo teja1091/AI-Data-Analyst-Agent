@@ -1,3 +1,4 @@
+
 import unittest
 
 import numpy as np
@@ -121,7 +122,10 @@ class TestCorrelationAnalyzer(unittest.TestCase):
         )
 
         self.assertTrue(
-            any("constant" in warning for warning in result["warnings"])
+            any(
+                "constant" in warning
+                for warning in result["warnings"]
+            )
         )
 
     def test_boolean_and_non_numeric_columns_are_excluded(self):
@@ -186,24 +190,18 @@ class TestCorrelationAnalyzer(unittest.TestCase):
 
         result = self.analyzer.analyze(df)
 
-        self.assertEqual(
-            result["pearson"],
-            []
-        )
-
-        self.assertEqual(
-            result["spearman"],
-            []
-        )
-
-        self.assertEqual(
-            result["pair_counts"],
-            []
-        )
+        self.assertEqual(result["pearson"], [])
+        self.assertEqual(result["spearman"], [])
+        self.assertEqual(result["pair_counts"], [])
 
         self.assertEqual(
             result["dataset_summary"]["numeric_column_count"],
             0
+        )
+
+        self.assertEqual(
+            result["configuration"]["max_numeric_columns"],
+            50
         )
 
     def test_empty_dataframe(self):
@@ -217,9 +215,61 @@ class TestCorrelationAnalyzer(unittest.TestCase):
             0
         )
 
+        self.assertEqual(result["columns"], [])
+
+    def test_nullable_integer_columns(self):
+
+        df = pd.DataFrame({
+            "sales": pd.Series(
+                [10, 20, 30, 40],
+                dtype="Int64"
+            ),
+            "profit": pd.Series(
+                [20, 40, pd.NA, 80],
+                dtype="Int64"
+            )
+        })
+
+        result = self.analyzer.analyze(df)
+
         self.assertEqual(
-            result["columns"],
-            []
+            result["pair_counts"][0][1],
+            3
+        )
+
+        self.assertAlmostEqual(
+            result["pearson"][0][1],
+            1.0
+        )
+
+        self.assertAlmostEqual(
+            result["spearman"][0][1],
+            1.0
+        )
+
+    def test_insufficient_pairwise_observations(self):
+
+        df = pd.DataFrame({
+            "x": [1, 2, 3],
+            "y": pd.Series(
+                [10, pd.NA, pd.NA],
+                dtype="Int64"
+            )
+        })
+
+        result = self.analyzer.analyze(df)
+
+        self.assertEqual(
+            result["pair_counts"][0][1],
+            1
+        )
+
+        self.assertIsNone(
+            result["pearson"][0][1]
+        )
+
+        self.assertIsNone(
+            result["spearman"][0][1]
         )
 
     def test_invalid_input(self):
@@ -239,6 +289,97 @@ class TestCorrelationAnalyzer(unittest.TestCase):
         self.analyzer.analyze(df)
 
         pd.testing.assert_frame_equal(df, original)
+
+    # New correlation safeguard tests
+
+    def test_default_limit_rejects_more_than_50_numeric_columns(self):
+
+        df = pd.DataFrame({
+            f"column_{i}": [1, 2, 3]
+            for i in range(51)
+        })
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "exceeding the configured limit of 50"
+        ):
+            self.analyzer.analyze(df)
+
+    def test_custom_numeric_column_limit(self):
+
+        df = pd.DataFrame({
+            "a": [1, 2, 3],
+            "b": [2, 4, 6],
+            "c": [3, 6, 9]
+        })
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "exceeding the configured limit of 2"
+        ):
+            self.analyzer.analyze(
+                df,
+                max_numeric_columns=2
+            )
+
+    def test_exact_numeric_column_limit_is_allowed(self):
+
+        df = pd.DataFrame({
+            "a": [1, 2, 3],
+            "b": [2, 4, 6]
+        })
+
+        result = self.analyzer.analyze(
+            df,
+            max_numeric_columns=2
+        )
+
+        self.assertEqual(
+            result["dataset_summary"]["numeric_column_count"],
+            2
+        )
+
+        self.assertEqual(len(result["pearson"]), 2)
+        self.assertEqual(len(result["spearman"]), 2)
+        self.assertEqual(len(result["pair_counts"]), 2)
+
+    def test_zero_and_negative_limits_are_invalid(self):
+
+        df = pd.DataFrame({
+            "x": [1, 2, 3]
+        })
+
+        for invalid_limit in [0, -1]:
+            with self.subTest(limit=invalid_limit):
+                with self.assertRaises(ValueError):
+                    self.analyzer.analyze(
+                        df,
+                        max_numeric_columns=invalid_limit
+                    )
+
+    def test_boolean_limit_is_invalid(self):
+
+        df = pd.DataFrame({
+            "x": [1, 2, 3]
+        })
+
+        with self.assertRaises(TypeError):
+            self.analyzer.analyze(
+                df,
+                max_numeric_columns=True
+            )
+
+    def test_non_integer_limit_is_invalid(self):
+
+        df = pd.DataFrame({
+            "x": [1, 2, 3]
+        })
+
+        with self.assertRaises(TypeError):
+            self.analyzer.analyze(
+                df,
+                max_numeric_columns=2.5
+            )
 
 
 if __name__ == "__main__":

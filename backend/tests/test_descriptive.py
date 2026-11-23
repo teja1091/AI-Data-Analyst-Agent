@@ -106,6 +106,75 @@ class TestDescriptiveAnalyzer(unittest.TestCase):
         )
         self.assertEqual(result["columns"], [])
 
+    def test_single_valid_observation(self):
+        df = pd.DataFrame({
+            "sales": [100]
+        })
+
+        result = DescriptiveAnalyzer.analyze(df)
+        column = result["columns"][0]
+        stats = column["statistics"]
+
+        self.assertEqual(column["valid_value_count"], 1)
+        self.assertEqual(column["unique_value_count"], 1)
+
+        self.assertEqual(stats["mean"], 100.0)
+        self.assertEqual(stats["median"], 100.0)
+        self.assertEqual(stats["minimum"], 100.0)
+        self.assertEqual(stats["maximum"], 100.0)
+        self.assertEqual(stats["range"], 0.0)
+
+        # Sample variance and standard deviation
+        # are undefined for a single observation.
+        self.assertIsNone(stats["standard_deviation"])
+        self.assertIsNone(stats["variance"])
+
+    def test_constant_numeric_column(self):
+        df = pd.DataFrame({
+            "discount": [5, 5, 5, 5, 5]
+        })
+
+        result = DescriptiveAnalyzer.analyze(df)
+        column = result["columns"][0]
+        stats = column["statistics"]
+
+        self.assertEqual(column["unique_value_count"], 1)
+        self.assertEqual(column["valid_value_count"], 5)
+
+        self.assertEqual(stats["mean"], 5.0)
+        self.assertEqual(stats["minimum"], 5.0)
+        self.assertEqual(stats["maximum"], 5.0)
+        self.assertEqual(stats["range"], 0.0)
+        self.assertEqual(stats["standard_deviation"], 0.0)
+        self.assertEqual(stats["variance"], 0.0)
+
+    def test_nullable_integer_column(self):
+        df = pd.DataFrame({
+            "quantity": pd.Series(
+                [1, 2, pd.NA, 4],
+                dtype="Int64"
+            )
+        })
+
+        result = DescriptiveAnalyzer.analyze(df)
+        column = result["columns"][0]
+
+        self.assertEqual(column["valid_value_count"], 3)
+        self.assertEqual(column["missing_count"], 1)
+        self.assertEqual(column["statistics"]["mean"], 7 / 3)
+
+    def test_zero_row_numeric_column(self):
+        df = pd.DataFrame({
+            "sales": pd.Series(dtype="float64")
+        })
+
+        result = DescriptiveAnalyzer.analyze(df)
+        column = result["columns"][0]
+
+        self.assertEqual(column["valid_value_count"], 0)
+        self.assertEqual(column["missing_count"], 0)
+        self.assertIsNone(column["statistics"])
+
     def test_invalid_input(self):
         with self.assertRaises(TypeError):
             DescriptiveAnalyzer.analyze([10, 20, 30])

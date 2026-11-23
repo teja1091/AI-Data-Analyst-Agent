@@ -166,6 +166,12 @@ class DistributionAnalyzer:
 
                 continue
 
+            # Calculate the number of distinct finite values.
+            # This is also used to identify constant columns.
+            unique_value_count = int(
+                np.unique(valid_values).size
+            )
+
             # Percentile calculations.
             percentile_values = np.percentile(
                 valid_values,
@@ -180,18 +186,29 @@ class DistributionAnalyzer:
                 )
             }
 
-            # Pandas skewness uses its adjusted sample estimator.
-            skewness_value = pd.Series(valid_values).skew()
+            # Constant columns have no variation.
+            # Therefore, skewness and kurtosis are mathematically undefined.
+            if unique_value_count <= 1:
 
-            skewness = cls._to_json_number(skewness_value)
+                skewness = None
+                excess_kurtosis = None
 
-            # Pandas kurtosis returns Fisher excess kurtosis.
-            # A normal distribution has an excess kurtosis of approximately 0.
-            kurtosis_value = pd.Series(valid_values).kurt()
+            else:
 
-            excess_kurtosis = cls._to_json_number(
-                kurtosis_value
-            )
+                # Pandas skewness uses its adjusted sample estimator.
+                skewness_value = pd.Series(valid_values).skew()
+
+                skewness = cls._to_json_number(
+                    skewness_value
+                )
+
+                # Pandas kurtosis returns Fisher excess kurtosis.
+                # A normal distribution has an excess kurtosis of approximately 0.
+                kurtosis_value = pd.Series(valid_values).kurt()
+
+                excess_kurtosis = cls._to_json_number(
+                    kurtosis_value
+                )
 
             # Histogram calculation.
             histogram_counts, bin_edges = np.histogram(
@@ -258,9 +275,7 @@ class DistributionAnalyzer:
                 "valid_value_count": int(valid_count),
                 "missing_count": missing_count,
                 "non_finite_count": non_finite_count,
-                "unique_value_count": int(
-                    np.unique(valid_values).size
-                ),
+                "unique_value_count": unique_value_count,
                 "statistics": statistics,
                 "percentiles": percentiles,
                 "skewness": skewness,

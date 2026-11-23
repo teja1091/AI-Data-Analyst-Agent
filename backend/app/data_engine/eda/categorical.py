@@ -5,11 +5,11 @@ from pandas.api.types import (
     is_bool_dtype,
     is_object_dtype,
     is_string_dtype,
-    is_categorical_dtype,
 )
 
 
 class CategoricalAnalyzer:
+    DEFAULT_MAX_CATEGORIES = 20
 
     @staticmethod
     def _is_categorical(series: pd.Series) -> bool:
@@ -22,11 +22,36 @@ class CategoricalAnalyzer:
             or is_string_dtype(dtype)
         )
 
+    @staticmethod
+    def _validate_max_categories(max_categories):
+        if max_categories is None:
+            return
+
+        if isinstance(max_categories, bool) or not isinstance(
+            max_categories, int
+        ):
+            raise TypeError(
+                "max_categories must be a positive integer or None."
+            )
+
+        if max_categories <= 0:
+            raise ValueError(
+                "max_categories must be greater than zero."
+            )
+
     @classmethod
-    def analyze(cls, df: pd.DataFrame) -> dict:
+    def analyze(
+        cls,
+        df: pd.DataFrame,
+        max_categories: int | None = DEFAULT_MAX_CATEGORIES
+    ) -> dict:
 
         if not isinstance(df, pd.DataFrame):
-            raise TypeError("Input must be a Pandas DataFrame.")
+            raise TypeError(
+                "Input must be a Pandas DataFrame."
+            )
+
+        cls._validate_max_categories(max_categories)
 
         columns = []
 
@@ -58,9 +83,32 @@ class CategoricalAnalyzer:
                 sort=True
             )
 
+            total_category_count = int(len(value_counts))
+
+            # Determine the most and least frequent categories
+            # from the complete distribution.
+            most_frequent = (
+                str(value_counts.index[0])
+                if total_category_count > 0
+                else None
+            )
+
+            least_frequent = (
+                str(value_counts.index[-1])
+                if total_category_count > 0
+                else None
+            )
+
+            # Limit only the returned category details.
+            returned_counts = (
+                value_counts
+                if max_categories is None
+                else value_counts.head(max_categories)
+            )
+
             categories = []
 
-            for value, count in value_counts.items():
+            for value, count in returned_counts.items():
 
                 frequency = int(count)
 
@@ -68,20 +116,19 @@ class CategoricalAnalyzer:
                     "value": str(value),
                     "count": frequency,
                     "percentage": (
-                        round(frequency / total_valid * 100, 2)
+                        round(
+                            frequency / total_valid * 100,
+                            2
+                        )
                         if total_valid > 0
                         else 0.0
                     )
                 })
 
-            most_frequent = (
-                categories[0]["value"]
-                if categories else None
-            )
+            returned_category_count = len(categories)
 
-            least_frequent = (
-                categories[-1]["value"]
-                if categories else None
+            omitted_category_count = (
+                total_category_count - returned_category_count
             )
 
             columns.append({
@@ -91,6 +138,10 @@ class CategoricalAnalyzer:
                 "unique_category_count": int(
                     valid_values.nunique()
                 ),
+                "total_category_count": total_category_count,
+                "returned_category_count": returned_category_count,
+                "omitted_category_count": omitted_category_count,
+                "categories_truncated": omitted_category_count > 0,
                 "valid_value_count": int(total_valid),
                 "missing_count": int(missing_mask.sum()),
                 "blank_count": int(

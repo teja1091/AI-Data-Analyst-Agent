@@ -1,3 +1,4 @@
+
 import numpy as np
 import pandas as pd
 
@@ -17,7 +18,12 @@ class CorrelationAnalyzer:
 
     Boolean and complex columns are excluded.
     The original DataFrame is never modified.
+
+    A configurable maximum number of numeric columns prevents
+    uncontrolled quadratic growth in correlation matrices.
     """
+
+    DEFAULT_MAX_NUMERIC_COLUMNS = 50
 
     @staticmethod
     def _to_json_number(value):
@@ -32,14 +38,38 @@ class CorrelationAnalyzer:
 
         return result
 
+    @staticmethod
+    def _validate_max_numeric_columns(max_numeric_columns):
+        if (
+            isinstance(max_numeric_columns, bool)
+            or not isinstance(max_numeric_columns, int)
+        ):
+            raise TypeError(
+                "max_numeric_columns must be a positive integer."
+            )
+
+        if max_numeric_columns <= 0:
+            raise ValueError(
+                "max_numeric_columns must be greater than zero."
+            )
+
     @classmethod
-    def analyze(cls, df: pd.DataFrame) -> dict:
+    def analyze(
+        cls,
+        df: pd.DataFrame,
+        max_numeric_columns: int = DEFAULT_MAX_NUMERIC_COLUMNS
+    ) -> dict:
 
         if not isinstance(df, pd.DataFrame):
-            raise TypeError("Input must be a Pandas DataFrame.")
+            raise TypeError(
+                "Input must be a Pandas DataFrame."
+            )
 
-        numeric_columns = []
-        numeric_data = {}
+        cls._validate_max_numeric_columns(max_numeric_columns)
+
+        # Identify eligible numeric columns before converting their data
+        # or allocating any correlation matrices.
+        eligible_columns = []
 
         for column_index in range(df.shape[1]):
 
@@ -52,29 +82,52 @@ class CorrelationAnalyzer:
             ):
                 continue
 
+            eligible_columns.append(
+                (column_index, series)
+            )
+
+        column_count = len(eligible_columns)
+
+        # Fail explicitly instead of silently returning a partial matrix.
+        if column_count > max_numeric_columns:
+            raise ValueError(
+                f"Dataset contains {column_count} eligible numeric "
+                f"columns, exceeding the configured limit of "
+                f"{max_numeric_columns}. Reduce the number of numeric "
+                f"columns or increase max_numeric_columns."
+            )
+
+        numeric_columns = []
+        numeric_data = {}
+
+        for position, (column_index, series) in enumerate(
+            eligible_columns
+        ):
+
             values = pd.to_numeric(
-            series,
-            errors="coerce"
-        ).to_numpy(
-            dtype="float64",
-            na_value=np.nan,
-            copy=True
-        )
+                series,
+                errors="coerce"
+            ).to_numpy(
+                dtype="float64",
+                na_value=np.nan,
+                copy=True
+            )
 
             values[~np.isfinite(values)] = np.nan
-            numeric_data[len(numeric_columns)] = values
+
+            numeric_data[position] = values
 
             numeric_columns.append({
                 "column_index": column_index,
                 "name": str(df.columns[column_index]),
                 "pandas_dtype": str(series.dtype),
-                "valid_value_count": int(np.isfinite(values).sum()),
+                "valid_value_count": int(
+                    np.isfinite(values).sum()
+                ),
                 "unique_value_count": int(
                     pd.Series(values).dropna().nunique()
                 )
             })
-
-        column_count = len(numeric_columns)
 
         if column_count == 0:
             return {
@@ -82,6 +135,9 @@ class CorrelationAnalyzer:
                     "total_rows": int(df.shape[0]),
                     "total_columns": int(df.shape[1]),
                     "numeric_column_count": 0
+                },
+                "configuration": {
+                    "max_numeric_columns": max_numeric_columns
                 },
                 "columns": [],
                 "pearson": [],
@@ -116,7 +172,9 @@ class CorrelationAnalyzer:
         def convert_matrix(matrix):
             return [
                 [
-                    cls._to_json_number(matrix.iloc[row, column])
+                    cls._to_json_number(
+                        matrix.iloc[row, column]
+                    )
                     for column in range(column_count)
                 ]
                 for row in range(column_count)
@@ -124,7 +182,7 @@ class CorrelationAnalyzer:
 
         warnings = []
 
-        for position, column in enumerate(numeric_columns):
+        for column in numeric_columns:
 
             if column["valid_value_count"] < 2:
                 warnings.append(
@@ -143,6 +201,9 @@ class CorrelationAnalyzer:
                 "total_rows": int(df.shape[0]),
                 "total_columns": int(df.shape[1]),
                 "numeric_column_count": column_count
+            },
+            "configuration": {
+                "max_numeric_columns": max_numeric_columns
             },
             "columns": numeric_columns,
             "pearson": convert_matrix(pearson_df),
