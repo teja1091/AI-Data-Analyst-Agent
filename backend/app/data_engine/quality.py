@@ -377,22 +377,17 @@ class QualityAnalyzer:
 
         cls._validate_dataframe(df)
 
-        if not isinstance(threshold, (int, float)):
+        if isinstance(threshold, bool) or not isinstance(
+            threshold, (int, float)
+        ):
             raise TypeError(
-                "Threshold must be a number between 0 and 1"
+                "Threshold must be a number between 0 and 1."
             )
 
         if not 0 < threshold <= 1:
             raise ValueError(
-                "Threshold must be greater than 0 and at most 1"
+                "Threshold must be greater than 0 and at most 1."
             )
-
-        if isinstance(threshold, bool) or not isinstance(
-                threshold, (int, float)
-            ):
-                raise TypeError(
-                    "Threshold must be a number between 0 and 1"
-                )
 
         dominant_columns = []
 

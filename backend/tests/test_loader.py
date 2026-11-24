@@ -144,6 +144,79 @@ class TestDatasetLoader(unittest.TestCase):
             df.iloc[0]["Product"],
             "Café"
         )
+    
+    def test_uppercase_file_extension(self):
+        df = DatasetLoader.load(
+            "sales.CSV",
+            self.csv_content
+        )
+
+        self.assertEqual(df.shape, (2, 3))
+
+
+    def test_filename_with_whitespace(self):
+        df = DatasetLoader.load(
+            "  sales.csv  ",
+            self.csv_content
+        )
+
+        self.assertEqual(df.shape, (2, 3))
+
+
+    def test_invalid_excel_zip(self):
+        with self.assertRaises(ValueError):
+            DatasetLoader.load(
+                "sales.xlsx",
+                b"Not a valid ZIP archive"
+            )
+
+
+    def test_corrupted_excel_zip(self):
+        corrupted_buffer = BytesIO()
+
+        import zipfile
+
+        with zipfile.ZipFile(
+            corrupted_buffer,
+            mode="w"
+        ) as archive:
+            archive.writestr("invalid.txt", "not an Excel workbook")
+
+        with self.assertRaises(ValueError):
+            DatasetLoader.load(
+                "sales.xlsx",
+                corrupted_buffer.getvalue()
+            )
+
+
+    def test_excel_with_no_data_rows(self):
+        excel_buffer = BytesIO()
+
+        source_df = pd.DataFrame({
+            "Product": pd.Series(dtype="object"),
+            "Quantity": pd.Series(dtype="float64")
+        })
+
+        source_df.to_excel(
+            excel_buffer,
+            index=False,
+            engine="openpyxl"
+        )
+
+        with self.assertRaises(ValueError):
+            DatasetLoader.load(
+                "sales.xlsx",
+                excel_buffer.getvalue()
+            )
+
+
+    def test_filename_without_extension(self):
+        with self.assertRaises(ValueError):
+            DatasetLoader.load(
+                "sales",
+                self.csv_content
+            )
+
 
 
 if __name__ == "__main__":

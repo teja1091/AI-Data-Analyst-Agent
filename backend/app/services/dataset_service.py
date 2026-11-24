@@ -10,42 +10,55 @@ from app.schemas.dataset import (
 
 
 class DatasetService:
+    """
+    Coordinates dataset loading, structural analysis,
+    and data quality analysis.
+    """
 
-    def __init__(self):
-        self.loader = DatasetLoader()
-        self.structure_analyzer = StructureAnalyzer()
-        self.quality_analyzer = QualityAnalyzer()
+    def __init__(
+        self,
+        loader=None,
+        structure_analyzer=None,
+        quality_analyzer=None,
+    ):
+        self.loader = (
+            loader if loader is not None else DatasetLoader()
+        )
+        self.structure_analyzer = (
+            structure_analyzer
+            if structure_analyzer is not None
+            else StructureAnalyzer()
+        )
+        self.quality_analyzer = (
+            quality_analyzer
+            if quality_analyzer is not None
+            else QualityAnalyzer()
+        )
 
     def process_upload(
         self,
         filename: str,
-        file_content: bytes
+        file_content: bytes,
     ) -> DatasetUploadResponse:
 
-        # 1. Load uploaded file into a DataFrame
         df = self.loader.load(
             filename=filename,
-            file_content=file_content
+            file_content=file_content,
         )
 
-        # 2. Analyze dataset structure
         structure = self.structure_analyzer.analyze(df)
-
-        # 3. Analyze dataset quality
         quality = self.quality_analyzer.analyze(df)
 
-        # 4. Create dataset metadata
         metadata = DatasetMetadata(
             filename=filename,
             total_rows=int(df.shape[0]),
-            total_columns=int(df.shape[1])
+            total_columns=int(df.shape[1]),
         )
 
-        # 5. Build structured API response
         return DatasetUploadResponse(
             status="success",
             message="Dataset uploaded and analyzed successfully.",
             dataset=metadata,
             structure=structure,
-            quality=quality
+            quality=quality,
         )

@@ -4,12 +4,22 @@ import pandas as pd
 from pandas.api.types import (
     is_bool_dtype,
     is_numeric_dtype,
+    is_complex_dtype,
     is_datetime64_any_dtype,
     is_timedelta64_dtype,
+    is_string_dtype,
 )
 
 
 class StructureAnalyzer:
+    """
+    Analyzes the structural characteristics of a Pandas DataFrame.
+
+    Classifies columns based on their Pandas dtypes.
+    This is an initial dtype-based classification, not semantic inference.
+
+    The original DataFrame is never modified.
+    """
 
     @staticmethod
     def classify_column(series: pd.Series) -> str:
@@ -17,13 +27,13 @@ class StructureAnalyzer:
         Identify the initial analytical type of a Pandas Series.
         """
 
+        if not isinstance(series, pd.Series):
+            raise TypeError("Input must be a Pandas Series.")
+
         dtype = series.dtype
 
         if is_bool_dtype(dtype):
             return "boolean"
-
-        if is_numeric_dtype(dtype):
-            return "numeric"
 
         if is_datetime64_any_dtype(dtype):
             return "datetime"
@@ -34,7 +44,13 @@ class StructureAnalyzer:
         if isinstance(dtype, pd.CategoricalDtype):
             return "categorical"
 
-        if pd.api.types.is_string_dtype(dtype):
+        if is_complex_dtype(dtype):
+            return "complex"
+
+        if is_numeric_dtype(dtype):
+            return "numeric"
+
+        if is_string_dtype(dtype):
             return "categorical_or_text"
 
         return "other"
@@ -46,14 +62,17 @@ class StructureAnalyzer:
         """
 
         if not isinstance(df, pd.DataFrame):
-            raise TypeError("Input must be a Pandas DataFrame")
+            raise TypeError("Input must be a Pandas DataFrame.")
 
         columns = []
 
-        for column_name, series in df.items():
+        for column_index in range(df.shape[1]):
+
+            series = df.iloc[:, column_index]
 
             columns.append({
-                "name": str(column_name),
+                "column_index": column_index,
+                "name": str(df.columns[column_index]),
                 "pandas_dtype": str(series.dtype),
                 "analytical_type": cls.classify_column(series)
             })
